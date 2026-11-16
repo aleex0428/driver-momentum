@@ -1,9 +1,11 @@
-# Makes the two release files in release\: msyeett.driver-form-<version>.swoftyaddon and the same as .zip.
+# Makes the two release files in release\: alexs.driver-momentum-<version>.swoftyaddon and the same as .zip.
+# (tools\check_addon.py --pack in the F1 25 MODS folder makes the same package from swofty.json.)
 # Double-click package.bat in the repo (it builds the DLL first). GitHub runs this too when a version tag is pushed.
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 $manifest = Get-Content (Join-Path $root 'swofty.json') -Raw | ConvertFrom-Json
-$files = @('swofty.json', 'README.md', 'LICENSE', 'CHANGELOG.md', 'icons/driver-form.png', 'native/driver_form.dll')
+$files = @('swofty.json', 'README.md', 'LICENSE', 'CHANGELOG.md', 'icons/driver-momentum.png',
+           'native/driver_momentum.dll')
 foreach ($f in $files) {
     if (-not (Test-Path (Join-Path $root $f))) { throw "missing $f" }
 }

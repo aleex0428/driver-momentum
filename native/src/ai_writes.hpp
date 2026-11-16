@@ -46,31 +46,43 @@ inline float quality_of(const Driver &driver)
     return quality;
 }
 
-// Gives the driver back to the game exactly as it was.
-inline void clear_driver(const Driver &driver)
+// Gives the driver back to the game as it was: only what this addon wrote (a car it never wrote to, yours above all,
+// is never touched).
+inline void clear_driver(Driver &driver)
 {
-    for (uintptr_t state : {driver.state, driver.master}) {
-        if (!state) {
+    for (auto [state, wrote] : {std::pair{driver.state, &driver.wrote_state}, std::pair{driver.master, &driver.wrote_master}}) {
+        if (!state || !*wrote) {
             continue;
         }
         for (int characteristic = 0; characteristic < 6; characteristic++) {
             ai_driver::clear_characteristic(state, characteristic);
         }
         ai_driver::clear_difficulty(state);
+        *wrote = false;
     }
-    if (driver.profile) {
+    if (driver.profile && driver.wrote_profile) {
         ai_driver::poke<float>(driver.profile + 0x148, driver.stock.base_lap_time);
+        driver.wrote_profile = false;
     }
 }
 
-inline void write_driver(const Driver &driver)
+// Whether this addon has anything of its own in the game for the driver.
+inline bool wrote_any(const Driver &driver)
 {
+    return driver.wrote_profile || driver.wrote_state || driver.wrote_master || !driver.layers.empty();
+}
+
+inline void write_driver(Driver &driver)
+{
+    if (driver.human)
+        return; // never yours
     constexpr int kWrittenCharacteristics[] = {0, 1, 4, 5}; // aggression, control, speed in, speed out
     float quality = quality_of(driver);
-    for (uintptr_t state : {driver.state, driver.master}) {
+    for (auto [state, wrote] : {std::pair{driver.state, &driver.wrote_state}, std::pair{driver.master, &driver.wrote_master}}) {
         if (!state) {
             continue;
         }
+        *wrote = true;
         // A moment: for a few seconds the driver drives far below their level.
         if (driver.patch == Patch::moment) {
             ai_driver::set_difficulty(state, driver.stock.difficulty * 0.35f);
@@ -88,12 +100,15 @@ inline void write_driver(const Driver &driver)
     }
     if (driver.profile) {
         ai_driver::poke<float>(driver.profile + 0x148, driver.stock.base_lap_time + shift_of(driver));
+        driver.wrote_profile = true;
     }
 }
 
 // Good form makes a driver defend harder, bad form makes them give way sooner.
 inline void start_layers(Driver &driver)
 {
+    if (driver.human)
+        return;
     Layer layer =
         Layer::scale(Cars::car(cars::live::Car(driver.car)), kBlocking, std::exp2(driver.form * g_strength.blocking));
     if (layer.ok()) {

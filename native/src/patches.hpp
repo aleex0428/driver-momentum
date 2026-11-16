@@ -14,7 +14,7 @@ inline void tick_patch(Driver &driver, Clock::time_point now)
     if (driver.patch != Patch::none) {
         if (now >= driver.patch_until) {
             if (driver.patch != Patch::moment) {
-                log("[driver-form] %s patch over", driver.label.c_str());
+                log("[driver-momentum] %s patch over", driver.label.c_str());
             }
             driver.patch = Patch::none;
             driver.next_event = now + std::chrono::seconds(45);
@@ -63,7 +63,7 @@ inline void tick_patch(Driver &driver, Clock::time_point now)
     } else if (driver.patch == Patch::bad) {
         kind = "bad patch";
     }
-    log("[driver-form] %s %s for %.0f s (form %+.2f)", driver.label.c_str(), kind, double(seconds),
+    log("[driver-momentum] %s %s for %.0f s (form %+.2f)", driver.label.c_str(), kind, double(seconds),
         double(driver.form));
 }
 

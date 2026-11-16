@@ -29,6 +29,7 @@ constexpr uintptr_t kEntrantStride = 0x88;
 
 struct Entrant {
     uint16_t driver = 0; // matches entrants.drivers stat_id
+    bool known = false;  // 0.1.0 fix: the stat id was read (0 is Carlos Sainz then); a failed read leaves it unknown
     uint8_t number = 0;
     uint8_t car = 0xff;  // the game's vehicle id
     std::string label;   // the DB row, when the grid came from the event context
@@ -47,7 +48,7 @@ inline bool entrants_from_setup(uintptr_t setup, std::vector<Entrant> &out)
     }
     for (uintptr_t address = begin; address < end; address += kEntrantStride) {
         Entrant entrant;
-        mem::read(address + 0x52, entrant.driver);
+        entrant.known = mem::read(address + 0x52, entrant.driver);
         mem::read(address + 0x83, entrant.number);
         mem::read(address + 0x82, entrant.car);
         out.push_back(entrant);
@@ -111,6 +112,8 @@ inline std::string game_name(const ai_driver::GameDrivers &game, uint32_t car)
     return name;
 }
 
+inline int g_game_session_type = -1; // the game's own session type number, for the log; -1 unknown
+
 // The kind of session: 0 practice, 1 qualifying, 2 race. -1 when it can't be read.
 inline int session_kind(const ai_driver::GameDrivers &game)
 {
@@ -130,7 +133,10 @@ inline int session_kind(const ai_driver::GameDrivers &game)
     if (!mem::read(session_info + 4, type)) {
         return -1;
     }
-    log("[driver-form] game session type %u", type);
+    if (int(type) != g_game_session_type) {
+        log("[driver-momentum] game session type %u", type);
+    }
+    g_game_session_type = int(type);
     if (type >= 1 && type <= 4) {
         return 0;
     }
@@ -154,7 +160,7 @@ inline void report_route(int route, size_t count)
     }
     last_route = route;
     const char *const kRoutes[] = {"game manager", "AI system", "career context", "AI records", "race state"};
-    log("[driver-form] grid from %s: %zu cars", kRoutes[route], count);
+    log("[driver-momentum] grid from %s: %zu cars", kRoutes[route], count);
 }
 
 // The grid. A Grand Prix holds it where the launcher's own trace reads it; a career does not (the trace shows no

@@ -24,11 +24,12 @@ inline void on_lap(uint32_t car)
             continue;
         }
         driver.crossings++;
+        driver.last_crossing = Clock::now(); // 0.1.0 fix: a lapped car still crossing is no retirement
         int crossing = std::min(driver.crossings, int(g_cars_at_crossing.size()) - 1);
         int position = ++g_cars_at_crossing[crossing];
         auto milliseconds =
             std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now().time_since_epoch()).count();
-        log("[driver-form] lap car %u %s form %+.2f P%d t=%lldms", driver.car, driver.label.c_str(),
+        log("[driver-momentum] lap car %u %s form %+.2f P%d t=%lldms", driver.car, driver.label.c_str(),
             double(driver.form), position, (long long)milliseconds);
         bool just_pitted = driver.pit_crossing == crossing || driver.pit_crossing == crossing - 1;
         if (driver.last_position && !driver.human && !just_pitted) {

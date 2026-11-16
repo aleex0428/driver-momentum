@@ -42,18 +42,18 @@ inline uintptr_t manager_slot()
     }
     uint8_t bytes[7]{};
     if (!setup_function || !mem::read(setup_function + kSetupMovOffset, bytes)) {
-        log("[driver-form] setup function not found, addon off");
+        log("[driver-momentum] setup function not found, addon off");
         return 0;
     }
     if (bytes[0] != 0x48 || bytes[1] != 0x8b || bytes[2] != 0x05) {
-        log("[driver-form] bytes at setup+0xa42 are not the expected mov (%02x %02x %02x), addon off", bytes[0],
+        log("[driver-momentum] bytes at setup+0xa42 are not the expected mov (%02x %02x %02x), addon off", bytes[0],
             bytes[1], bytes[2]);
         return 0;
     }
     int32_t displacement = 0;
     std::memcpy(&displacement, bytes + 3, 4);
     slot = setup_function + kSetupMovOffset + 7 + intptr_t(displacement);
-    log("[driver-form] AI manager slot %llx", (unsigned long long)slot);
+    log("[driver-momentum] AI manager slot %llx", (unsigned long long)slot);
     return slot;
 }
 

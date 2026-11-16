@@ -64,7 +64,7 @@ inline uintptr_t wanted(const char *id, uintptr_t *slot)
 }
 
 template <name N> struct bound {
-    static inline uintptr_t addr = wanted(N.s, &addr);
+    static inline uintptr_t addr = wanted(N.s, &bound<N>::addr); // MSVC: qualified self-reference
 };
 
 struct mixin {

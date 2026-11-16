@@ -1,12 +1,13 @@
 {
   "schema_version": 1,
-  "id": "msyeett.driver-form",
-  "name": "Driver Form",
-  "version": "0.1.5",
-  "author": "msyeett",
-  "description": "AI drivers have a weekend form: some are flying, others drift off the pace and make mistakes. Offline only. To see who is in form, turn on the toasts and Messages in ADDON SETTINGS. They are off by default.",
+  "id": "alexs.driver-momentum",
+  "name": "Driver Momentum",
+  "version": "0.1.0",
+  "author": "Alex Sánchez",
+  "description": "AI drivers have a weekend form that follows their season: hot streaks and slumps from their results in Driver Career and My Team, veterans steadier than rookies, and a thermal Form Guide (F6). Based on msyeett's Driver Form.",
   "license": "MIT",
-  "repository": "https://github.com/constructor-mods/driver-form",
+  "repository": "https://github.com/aleex0428/driver-momentum",
+  "icon": "icons/driver-momentum.png",
   "kind": [
     "native"
   ],
@@ -23,6 +24,15 @@
       "id": "swofty.core",
       "version": ">=0.1.0"
     }
+  ],
+  "conflicts": [
+    {
+      "id": "msyeett.driver-form"
+    }
+  ],
+  "experimental_features": [
+    "overlay",
+    "telemetry"
   ],
   "options": [
     {
@@ -56,10 +66,126 @@
       "binds": "native"
     },
     {
+      "id": "momentum",
+      "type": "choice",
+      "label": "Momentum",
+      "description": "How much a driver's streak counts in Driver Career and My Team. Off is a fresh roll every weekend, like the original Driver Form. Strong lets results carry from race to race.",
+      "values": [
+        {
+          "value": "off",
+          "label": "Off"
+        },
+        {
+          "value": "light",
+          "label": "Light"
+        },
+        {
+          "value": "normal",
+          "label": "Normal"
+        },
+        {
+          "value": "strong",
+          "label": "Strong"
+        }
+      ],
+      "default": "normal",
+      "binds": "native"
+    },
+    {
+      "id": "guide_key",
+      "type": "choice",
+      "label": "Form Guide key",
+      "description": "The key that opens and closes the Form Guide panel during a session. Pick another if an addon of yours uses F6.",
+      "values": [
+        {
+          "value": "f6",
+          "label": "F6"
+        },
+        {
+          "value": "f5",
+          "label": "F5"
+        },
+        {
+          "value": "f9",
+          "label": "F9"
+        },
+        {
+          "value": "f10",
+          "label": "F10"
+        },
+        {
+          "value": "f11",
+          "label": "F11"
+        },
+        {
+          "value": "off",
+          "label": "None"
+        }
+      ],
+      "default": "f6",
+      "binds": "native"
+    },
+    {
+      "id": "guide_size",
+      "type": "choice",
+      "label": "Form Guide size",
+      "description": "How big the Form Guide and its reminder are on screen.",
+      "values": [
+        {
+          "value": "small",
+          "label": "Small"
+        },
+        {
+          "value": "normal",
+          "label": "Normal"
+        },
+        {
+          "value": "large",
+          "label": "Large"
+        }
+      ],
+      "default": "normal",
+      "binds": "native"
+    },
+    {
+      "id": "guide_hint",
+      "type": "toggle",
+      "label": "Form Guide reminder",
+      "description": "At the first session of each weekend, a tab slides out of the screen edge for a few seconds with the key that opens the Form Guide.",
+      "default": true,
+      "binds": "native"
+    },
+    {
+      "id": "guide_compact",
+      "type": "toggle",
+      "label": "Compact view on track",
+      "description": "While the Form Guide is closed, a small strip shows three drivers: in a race the cars ahead and behind you and your teammate, otherwise who is most and least in form.",
+      "default": true,
+      "binds": "native"
+    },
+    {
+      "id": "guide_motion",
+      "type": "choice",
+      "label": "Form Guide motion",
+      "description": "Reduced drops the slide, the scan line and the flashing; live moments stay as fixed marks.",
+      "values": [
+        {
+          "value": "full",
+          "label": "Full"
+        },
+        {
+          "value": "reduced",
+          "label": "Reduced"
+        }
+      ],
+      "default": "full",
+      "binds": "native"
+    },
+    {
       "id": "form_board",
       "type": "toggle",
       "label": "In form / Out of form toasts",
-      "description": "After the first lap, name the drivers who are in form and out of form. Off by default.",
+      "description": "After the first lap, name the drivers who are in form and out of form, and in a career those on a hot streak or in a slump. Off by default.",
       "default": false,
       "binds": "native"
     },
@@ -205,9 +331,8 @@
   "operations": {
     "native": [
       {
-        "dll": "native/driver_form.dll"
+        "dll": "native/driver_momentum.dll"
       }
     ]
-  },
-  "icon": "icons/driver-form.png"
+  }
 }

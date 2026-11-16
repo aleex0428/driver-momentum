@@ -3,11 +3,12 @@ native/build/
 *.dll
 *.lib
 *.swoftyaddon
+dist/
 
 # local files
 release/
 test-out/
-tests/
+/tests/
 test-backup/
 telemetry/
 *.log
