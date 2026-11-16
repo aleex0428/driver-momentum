@@ -507,6 +507,18 @@ void paint(SwoftyPaint *paint, void *user)
 
 } // namespace
 
+// 0.1.1: the launcher's site binding where the game pushes each car's record into the AI system it is building (rbx:
+// the AiSystem; Swofty's KB, re/db/structs/AiSystem.h). Declared here: the SDK headers don't list site bindings yet.
+namespace swofty::game {
+inline constexpr site<"site_Ai_BuildSystem_RecordPushed"> site_Ai_BuildSystem_RecordPushed{};
+}
+
+SWOFTY_SITE(site_Ai_BuildSystem_RecordPushed, swofty::Context &c)
+{
+    ai_driver::g_built_system.store(c.rbx); // read only: the game's registers are left as they are
+    ai_driver::g_built_pushes.fetch_add(1, std::memory_order_relaxed);
+}
+
 SWOFTY_ON_LOAD
 {
     log("[driver-momentum] ready: version %s, based on Driver Form by msyeett", DM_VERSION);

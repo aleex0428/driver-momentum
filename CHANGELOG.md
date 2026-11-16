@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.1
+
+Safer on game updates (F1 25 1.0.145, 16 Nov):
+- **The AI system is checked before anything is written.** The addon finds the game's AI manager as Driver Form does, then checks it against the AI system the game itself builds, caught at a launcher binding (`site_Ai_BuildSystem_RecordPushed`). If the two don't agree, as after a game update that moves the game's code, every car is left alone and the log says why, instead of writing into the wrong place.
+- **The values are checked too:** before a weekend form goes in, every car's base lap time, driving characteristics and difficulty must be in range and the field's lap times close to each other, with one record per car. Otherwise the addon leaves every car alone and says so in the log (`layout check failed: ...`).
+
 ## 0.1.0
 First version of Driver Momentum, built on msyeett's Driver Form 0.1.5.
 

@@ -5,6 +5,7 @@
 #include <swofty/mem.hpp>
 #include <swofty/mixin.hpp>
 
+#include <atomic>
 #include <cstdint>
 #include <cstring>
 
@@ -57,6 +58,16 @@ inline uintptr_t manager_slot()
     return slot;
 }
 
+// 0.1.1: the AI system the game just built, caught at the launcher's binding site_Ai_BuildSystem_RecordPushed (rbx
+// there is the AiSystem being filled, by Swofty's knowledge base). It is the check on the manager found above: the
+// addon only writes when manager + 0x38 is this same object, so a game update that moves the code at setup + 0xa42
+// leaves every car alone instead of writing into the wrong place.
+inline std::atomic<uintptr_t> g_built_system{0};
+inline std::atomic<uint32_t> g_built_pushes{0};
+
+// why find() last refused, for one log line each time it changes
+inline const char *g_find_refused = nullptr;
+
 inline bool find(GameDrivers &game)
 {
     uintptr_t slot = manager_slot();
@@ -68,6 +79,20 @@ inline bool find(GameDrivers &game)
     }
     if (!mem::read(game.manager + 0x38, game.system) || !game.system) {
         return false;
+    }
+    uintptr_t built = g_built_system.load();
+    if (built != game.system) {
+        const char *why = built ? "the AI manager's system is not the one the game built: the layout moved" : "the game hasn't built its AI system yet";
+        if (why != g_find_refused) {
+            g_find_refused = why;
+            log("[driver-momentum] layout check: %s (manager %llx -> %llx, built %llx); no car is changed", why,
+                (unsigned long long)game.manager, (unsigned long long)game.system, (unsigned long long)built);
+        }
+        return false;
+    }
+    if (g_find_refused) {
+        g_find_refused = nullptr;
+        log("[driver-momentum] layout check: the AI manager's system is the one the game built");
     }
     uintptr_t records_begin = 0;
     uintptr_t records_end = 0;

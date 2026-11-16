@@ -15,10 +15,12 @@
 
 #include <swofty/live.hpp>
 
+#include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <ctime>
 #include <map>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -179,6 +181,41 @@ inline bool build()
     }
     if (g_drivers.empty()) {
         return false;
+    }
+    // 0.1.1: the values read through the layout must look like the game's before anything is written: a lap time a
+    // car can do, characteristics in range, the field's lap times close to each other, one record per car. A game
+    // update that moved a field fails here and the addon leaves every car alone (and says why).
+    {
+        const char *why = nullptr;
+        std::vector<float> laps;
+        std::set<uint32_t> cars;
+        for (const Driver &driver : g_drivers) {
+            const ai_driver::Stock &s = driver.stock;
+            if (!(s.base_lap_time > 30.0f && s.base_lap_time < 250.0f))
+                why = "a base lap time out of range";
+            for (float v : s.characteristics)
+                if (!std::isfinite(v) || v < 0.0f || v > 2.0f)
+                    why = "a driving characteristic out of range";
+            if (!std::isfinite(s.difficulty) || s.difficulty < 0.0f || s.difficulty > 2.0f)
+                why = "a difficulty out of range";
+            if (!driver.state || !driver.master || !driver.profile)
+                why = "a car's values can't be reached";
+            if (!cars.insert(driver.car).second)
+                why = "two drivers on one car";
+            laps.push_back(s.base_lap_time);
+        }
+        if (!why && laps.size() >= 3) {
+            std::sort(laps.begin(), laps.end());
+            float median = laps[laps.size() / 2];
+            if (laps.front() < median * 0.8f || laps.back() > median * 1.25f)
+                why = "the field's base lap times far apart";
+        }
+        if (why) {
+            if (g_build_failures < 3)
+                log("[driver-momentum] layout check failed: %s; the addon leaves every car alone", why);
+            g_drivers.clear();
+            return false;
+        }
     }
     auto cars_done = Clock::now();
     // The game's own names first. The table of initials is slow to walk, so it is only read for drivers without one.
