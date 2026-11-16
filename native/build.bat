@@ -6,6 +6,8 @@ rem                               career_test (the book, the races and the sprin
 rem   build.bat model          -> only model_test; "career" likewise
 rem   build.bat preview <dir>  -> draws the Form Guide panel into SVG files (tools\render_svgs.py makes PNGs)
 rem native\build.sh still builds the DLL with zig, as the original Driver Form did.
+rem The DLL is linked with its PDB (build\<name>.pdb, never packaged): /PDBALTPATH:%%_PDB%% keeps this PC's path out of
+rem the DLL. tools\crash_lab.py stores each version's PDB and names our frames in crash reports.
 setlocal EnableDelayedExpansion
 cd /d "%~dp0"
 
@@ -23,7 +25,7 @@ set "PATH=%ProgramFiles(x86)%\Microsoft Visual Studio\Installer;%PATH%"
 call "%VSDIR%\VC\Auxiliary\Build\vcvars64.bat" >nul || exit /b 1
 
 if not exist build mkdir build
-set FLAGS=/nologo /std:c++latest /EHsc /O2 /MT /W3 /Zc:preprocessor /Zc:__cplusplus /utf-8 /permissive- /D_CRT_SECURE_NO_WARNINGS /DNOMINMAX /I include /Fobuild\
+set FLAGS=/nologo /std:c++latest /EHsc /O2 /MT /W3 /Zc:preprocessor /Zc:__cplusplus /utf-8 /permissive- /D_CRT_SECURE_NO_WARNINGS /DNOMINMAX /Z7 /I include /Fobuild\
 rem the addon's version, from the manifest, for the line it logs when it loads
 set "DMVER=dev"
 for /f "tokens=2 delims=:, " %%v in ('findstr /c:"\"version\"" ..\swofty.json') do if "!DMVER!"=="dev" set "DMVER=%%~v"
@@ -51,7 +53,7 @@ if "%DLL%"=="1" set "SRC=!SRC! src\driver_form.cpp"
 for %%t in (%TESTS%) do set "SRC=!SRC! tests\%%t_test.cpp"
 cl %FLAGS% /MP /c %SRC% || exit /b 1
 if "%DLL%"=="1" (
-    link /NOLOGO /DLL build\driver_form.obj build\momentum.obj /OUT:driver_momentum.dll /IMPLIB:build\driver_momentum.lib || exit /b 1
+    link /NOLOGO /DLL build\driver_form.obj build\momentum.obj /OUT:driver_momentum.dll /IMPLIB:build\driver_momentum.lib /DEBUG /PDB:build\driver_momentum.pdb /PDBALTPATH:%%_PDB%% /OPT:REF /OPT:ICF /INCREMENTAL:NO || exit /b 1
     del /q driver_momentum.exp 2>nul
     echo built %CD%\driver_momentum.dll
 )
