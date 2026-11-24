@@ -4,7 +4,7 @@
 // weekend, the line-crossing fallback, a race left before the flag and the Grand Prix's weekend.txt. The core's
 // storage is an in-memory map and its live state the SDK's fake (swofty/fake_live.hpp).
 //
-// 0.1.0 fixes, each reproduced here first: your car's protection, what the addon writes and gives back, the modes,
+// 0.1.0 fixes, each reproduced here first: your car's protection, the levers it sets and gives back, the modes,
 // Carlos Sainz's stat id 0 and unknown cars, the book's format 2 and its safe move to a career's own id, the sprint
 // kept over a reload, a race closed twice or restarted, provisional classifications, and the service's answers.
 //
@@ -113,7 +113,6 @@ void make_grid(swofty::fake::Live &live, uint16_t first_stat = 10)
         d.verified = true;
         d.label = "DRIVER" + std::to_string(car);
         d.team = "team" + std::to_string(car / 2);
-        d.stock.base_lap_time = 91.25f;
         d.human = car == 5;
         g_drivers.push_back(std::move(d));
         auto &c = live.add_car(car, 0);
@@ -180,33 +179,53 @@ void ownership(swofty::fake::Live &live)
     check(ours(g_drivers[0]) && !ours(g_drivers[5]), "blind with the context: the others get their form, yours doesn't");
     g_control_blind = false;
 
-    // writes: only an AI car's profile, and only what was written is given back
+    // 0.2.0: the official levers: only an AI car's, set from its form, and given back by dropping the layers
     g_strength = {1.5f, 0.45f, 1.0f, 1.0f};
-    std::vector<uint8_t> mem_ai(0x200, 0), mem_you(0x200, 0);
-    float game_value = 77.0f;
-    std::memcpy(mem_you.data() + 0x148, &game_value, 4);
     Driver &ai = g_drivers[0];
     Driver &you = g_drivers[5];
-    ai.profile = reinterpret_cast<uintptr_t>(mem_ai.data());
-    you.profile = reinterpret_cast<uintptr_t>(mem_you.data());
     ai.human = false;
     ai.form = 0.8f;
+    ai.patch = Patch::none;
     you.human = true;
+    Levers in_form = levers_of(ai);
+    // -1.2 s on a 90 s lap is 1.33 % of it, half through grip and half through power, 3 % each per 1 %
+    check(std::fabs(in_form.grip - 1.02f) < 1e-3f && std::fabs(in_form.power - 1.02f) < 1e-3f,
+          "in form: a little more grip and power");
+    check(in_form.offset == 1.0f && in_form.attack == 1.0f, "in form: the driving is the game's own");
+    ai.form = -0.8f;
+    Levers out_form = levers_of(ai);
+    check(out_form.grip < 1.0f && out_form.power < 1.0f, "out of form: less grip and power");
+    check(out_form.offset > 1.0f && out_form.attack < 1.0f, "out of form: a wider line, less eager to attack");
+    ai.patch = Patch::moment;
+    Levers moment = levers_of(ai);
+    check(moment.grip < out_form.grip && moment.offset > out_form.offset, "a moment: far below their level");
+    ai.form = 1.0f;
+    ai.patch = Patch::hot;
+    g_strength = {3.5f, 0.7f, 2.5f, 2.5f}; // extreme
+    Levers top = levers_of(ai);
+    check(top.grip <= kPaceMax && top.power <= kPaceMax, "the levers stay inside their bounds");
+    ai.form = -1.0f;
+    ai.patch = Patch::bad;
+    Levers bottom = levers_of(ai);
+    check(bottom.grip >= kPaceMin && bottom.power >= kPaceMin && bottom.offset <= 4.0f && bottom.attack >= 0.3f,
+          "the levers stay inside their bounds at the bottom too");
+    g_strength = {1.5f, 0.45f, 1.0f, 1.0f};
+    ai.form = 0.8f;
+    ai.patch = Patch::none;
     write_driver(ai);
     write_driver(you);
-    float ai_now = 0, you_now = 0;
-    std::memcpy(&ai_now, mem_ai.data() + 0x148, 4);
-    std::memcpy(&you_now, mem_you.data() + 0x148, 4);
-    check(ai.wrote_profile && std::fabs(ai_now - (91.25f - 0.8f * 1.5f)) < 1e-3f, "the AI car's target lap time is written");
-    check(!you.wrote_profile && you_now == 77.0f, "your car is never written");
-    check(wrote_any(ai) && !wrote_any(you), "the addon knows what it wrote");
+    check(ai.levers_on && same_levers(ai.applied, in_form), "the AI car's levers follow its form");
+    check(!you.levers_on && you.lever_layers.empty() && !wrote_any(you), "your car is never layered");
     clear_driver(you);
-    std::memcpy(&you_now, mem_you.data() + 0x148, 4);
-    check(you_now == 77.0f, "giving back never touches a car the addon didn't write (yours keeps the game's value)");
+    check(!you.levers_on, "giving back never touches a car the addon didn't layer");
     clear_driver(ai);
-    std::memcpy(&ai_now, mem_ai.data() + 0x148, 4);
-    check(!ai.wrote_profile && std::fabs(ai_now - 91.25f) < 1e-4f, "the AI car gets the game's value back");
-    ai.profile = you.profile = 0;
+    check(!ai.levers_on && ai.lever_layers.empty(), "the AI car gets the game's values back");
+    // 0.2.0 (players' reports): Driver Form on too: the AI is left to it
+    g_leave_ai = true;
+    write_driver(ai);
+    start_layers(ai);
+    check(!ai.levers_on && !wrote_any(ai), "Driver Form on too: no lever, no layer");
+    g_leave_ai = false;
 }
 
 // ---- Carlos Sainz (stat 0) and cars without an identity ----
@@ -615,11 +634,17 @@ int main(int argc, char **argv)
     load_book("");
     g_weekend_hint.clear();
     g_context_humans.clear();
+    // 0.2.0: a Grand Prix's weekend is its track (the live state's track name), no longer the AI's base lap time read
+    // from the game's memory: the original's weekend file still loads, and its weekend starts again once
+    live.session().have |= SWOFTY_LIVE_SHAVE_TRACK_NAME;
+    std::snprintf(live.session().track_name, sizeof live.session().track_name, "%s", "Melbourne");
     give_weekend_forms();
     check(g_career.empty() && g_book_file == "weekend.txt", "a Grand Prix uses weekend.txt");
-    check(std::fabs(g_book.forms[10] - 0.75f) < 1e-4f && std::fabs(g_drivers[1].form + 0.8f) < 1e-4f,
-          "the original Driver Form's weekend carries on");
-    check(g_book.forms.size() == 6, "drivers it did not have get a form");
+    check(g_book.weekend == "track:Melbourne", "a Grand Prix's weekend is its track");
+    check(g_book.forms.size() == 6, "every driver gets a form");
+    float melbourne = g_book.forms[10];
+    give_weekend_forms();
+    check(g_book.forms[10] == melbourne, "the same track's weekend carries on");
     g_race_session = true;
     live_race(live, {0, 1, 2, 3, 4, 5}, {});
     watch_results();

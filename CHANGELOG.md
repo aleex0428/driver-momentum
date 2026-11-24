@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.2.0
+
+Only the launcher's own APIs, as the Addon Browser now asks (23 Nov):
+- **The form works through the launcher's official live car levers.** Pace: `ai.grip_scale` and `engine.power_scale`, half each. Driving quality: a wider line (`ai.offset_variation.max_offset`), a little less grip and less eagerness to attack (`ai.overtake.attacker_close_enough_car_lengths`). Defending: `ai.blocking.max_blocking_distance`, as before. They are layers the core keeps and gives back by itself: the addon no longer writes anything into the game's memory, and no longer reads the game's code (the `+0xa42` mov) or its AI records.
+- **The grid comes from the live state:** each car's driver and race number from the game's UDP participants, its name from `live::driver_name`, the session from the live session type. A career still uses its event context. The `site_Ai_BuildSystem_RecordPushed` hook is gone.
+- A Grand Prix's weekend is its track (the live state's track name), so a Grand Prix weekend that was under way when you updated starts again once.
+- **The compact strip and the Form Guide reminder are in the game's HUD editor** (the launcher's HUD slots, 1.10.21): move, resize or switch them off there. Both only show while the game shows its race HUD.
+- In the wet the grip lever does nothing, so a form shows at about half its pace there. The levers' size is still to be calibrated in the game.
+- Needs Swofty Launcher 1.10.21 or later. SDK headers updated to the launcher 1.10.35.
+
+From players' reports:
+- **Driver Form on too no longer stops Play** with a message that read like a crash. Driver Momentum leaves the AI to Driver Form, keeps its forms and the Form Guide, and a notification at each session says to turn one off.
+- **The compact strip:** outside a race its "OUT OF FORM" ran into the driver's name; it reads HOT and COLD now, and a role never leaves its column.
+
 ## 0.1.1
 
 Safer on game updates (F1 25 1.0.145, 16 Nov):

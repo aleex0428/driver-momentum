@@ -6,7 +6,6 @@
 #include <swofty/db.hpp>
 #include <swofty/registry.hpp>
 
-#include "ai_driver.hpp"
 #include "form_roll.hpp"
 #include "form_state.hpp"
 #include "grid.hpp"
@@ -27,9 +26,9 @@
 namespace driver_form {
 
 // The name the game shows for a driver. Most sessions have one for every car, so nothing slower is needed.
-inline bool set_game_label(Driver &driver, const Entrant &entrant, const ai_driver::GameDrivers &game)
+inline bool set_game_label(Driver &driver, const Entrant &entrant)
 {
-    std::string shown = game_name(game, entrant.car);
+    std::string shown = game_name(entrant.car);
     if (shown.empty()) {
         return false;
     }
@@ -117,9 +116,9 @@ inline std::string team_of(uint32_t car)
 }
 
 // Reads the "Messages" setting for this kind of session.
-inline std::string set_message_level(const ai_driver::GameDrivers &game)
+inline std::string set_message_level()
 {
-    int kind = session_kind(game);
+    int kind = session_kind();
     if (kind >= 0) {
         g_session_kind = kind;
     }
@@ -147,14 +146,20 @@ inline std::string set_message_level(const ai_driver::GameDrivers &game)
 }
 
 // Reads the grid and gives every driver their form. Returns false until the session is ready.
+// 0.2.0: from the launcher's APIs only (grid.hpp); nothing of the game's own memory is read, so there is no layout
+// for a game update to move.
 inline bool build()
 {
     auto start = Clock::now();
-    ai_driver::GameDrivers game;
     std::vector<Entrant> entrants;
-    if (!ai_driver::find(game) || !read_entrants(game, entrants)) {
+    // the first five seconds wait for the drivers' identity (the game's UDP participants come a moment after the cars)
+    if (!read_entrants(entrants, g_build_failures >= 10)) {
+        if (g_build_failures == 0) {
+            log("[driver-momentum] waiting for the live state's grid");
+        }
         return false;
     }
+    std::set<uint32_t> cars;
     for (const Entrant &entrant : entrants) {
         Driver driver;
         driver.car = entrant.car;
@@ -164,58 +169,19 @@ inline bool build()
             if (g_build_failures == 0) {
                 log("[driver-momentum] grid has no car numbers yet, waiting");
             }
+            g_drivers.clear();
             return false;
         }
-        if (!ai_driver::read_stock(game, entrant.car, driver.stock) || driver.stock.characteristics[4] <= 0 ||
-            driver.stock.base_lap_time <= 0) {
-            if (g_build_failures < 3) {
-                log("[driver-momentum] car %u not ready: speed_in %.3f base %.3f", unsigned(entrant.car),
-                    double(driver.stock.characteristics[4]), double(driver.stock.base_lap_time));
-            }
+        if (!cars.insert(entrant.car).second) {
+            if (g_build_failures < 3)
+                log("[driver-momentum] two drivers on car %u; the addon leaves every car alone", unsigned(entrant.car));
+            g_drivers.clear();
             return false;
         }
-        driver.state = ai_driver::state_of(game, entrant.car);
-        driver.master = ai_driver::master_of(game, entrant.car);
-        driver.profile = ai_driver::profile_of(game, entrant.car);
         g_drivers.push_back(std::move(driver));
     }
     if (g_drivers.empty()) {
         return false;
-    }
-    // 0.1.1: the values read through the layout must look like the game's before anything is written: a lap time a
-    // car can do, characteristics in range, the field's lap times close to each other, one record per car. A game
-    // update that moved a field fails here and the addon leaves every car alone (and says why).
-    {
-        const char *why = nullptr;
-        std::vector<float> laps;
-        std::set<uint32_t> cars;
-        for (const Driver &driver : g_drivers) {
-            const ai_driver::Stock &s = driver.stock;
-            if (!(s.base_lap_time > 30.0f && s.base_lap_time < 250.0f))
-                why = "a base lap time out of range";
-            for (float v : s.characteristics)
-                if (!std::isfinite(v) || v < 0.0f || v > 2.0f)
-                    why = "a driving characteristic out of range";
-            if (!std::isfinite(s.difficulty) || s.difficulty < 0.0f || s.difficulty > 2.0f)
-                why = "a difficulty out of range";
-            if (!driver.state || !driver.master || !driver.profile)
-                why = "a car's values can't be reached";
-            if (!cars.insert(driver.car).second)
-                why = "two drivers on one car";
-            laps.push_back(s.base_lap_time);
-        }
-        if (!why && laps.size() >= 3) {
-            std::sort(laps.begin(), laps.end());
-            float median = laps[laps.size() / 2];
-            if (laps.front() < median * 0.8f || laps.back() > median * 1.25f)
-                why = "the field's base lap times far apart";
-        }
-        if (why) {
-            if (g_build_failures < 3)
-                log("[driver-momentum] layout check failed: %s; the addon leaves every car alone", why);
-            g_drivers.clear();
-            return false;
-        }
     }
     auto cars_done = Clock::now();
     // The game's own names first. The table of initials is slow to walk, so it is only read for drivers without one.
@@ -223,7 +189,7 @@ inline bool build()
     for (size_t index = 0; index < g_drivers.size(); index++) {
         Driver &driver = g_drivers[index];
         set_stat_id(driver, entrants[index]);
-        if (!set_game_label(driver, entrants[index], game)) {
+        if (!set_game_label(driver, entrants[index])) {
             unnamed.push_back(index);
         }
         driver.team = team_of(driver.car);
@@ -252,9 +218,9 @@ inline bool build()
         }
     }
     auto names_done = Clock::now();
-    g_records = game.records;
+    g_live_generation = live_generation();
     give_weekend_forms();
-    std::string level = set_message_level(game);
+    std::string level = set_message_level();
     log("[driver-momentum] %zu drivers, %.1f s a lap at full form, session kind %d, messages %s", g_drivers.size(),
         double(g_strength.seconds), g_session_kind, level.c_str());
     for (const Driver &driver : g_drivers) {

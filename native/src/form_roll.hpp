@@ -9,6 +9,7 @@
 #pragma once
 #include <swofty/mixin.hpp>
 
+#include <swofty/live.hpp>
 #include <swofty/storage.hpp>
 #include <swofty/systems/career.hpp>
 
@@ -209,14 +210,20 @@ inline std::vector<momentum::Entrant> book_entrants()
     return out;
 }
 
-// The weekend this session belongs to: the career's round when the game says it, else the track's base lap time
-// (the original Driver Form's key, which also tells a Grand Prix's weekends apart).
+// The weekend this session belongs to: the career's round when the game says it, else the track (0.2.0: the live
+// state's track name, or its length, instead of the AI's base lap time read from the game's memory).
 inline std::string weekend_key()
 {
     if (!g_weekend_hint.empty())
         return g_weekend_hint;
+    auto session = live::session();
+    if (session && live::has(*session, SWOFTY_LIVE_SHAVE_TRACK_NAME) && session->track_name[0]) {
+        std::string name(session->track_name, strnlen(session->track_name, sizeof session->track_name));
+        return "track:" + name;
+    }
     char buffer[48];
-    std::snprintf(buffer, sizeof buffer, "lap:%.3f", g_drivers.empty() ? 0.0 : double(g_drivers[0].stock.base_lap_time));
+    std::snprintf(buffer, sizeof buffer, "length:%.0f",
+                  session && live::has(*session, SWOFTY_LIVE_SHAVE_TRACK_LENGTH) ? double(session->track_length_m) : 0.0);
     return buffer;
 }
 

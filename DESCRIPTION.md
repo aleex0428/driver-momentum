@@ -2,8 +2,9 @@ AI drivers have a weekend form, and in **Driver Career** and **My Team** that fo
 
 ### Weekend form
 - Every AI driver is in form, out of form or neutral for the weekend. It lasts through practice, qualifying and the race, even if you close the game between sessions.
-- In form: quicker over a lap through the game's own AI pace, hot spells of extra time, harder to pass.
-- Out of form: slower, they brake earlier, carry less speed and get on the throttle later, with bad patches and sudden mistakes.
+- In form: quicker over a lap, hot spells of extra time, harder to pass.
+- Out of form: slower, a wider and less tidy line, less eager to attack, with bad patches and sudden mistakes.
+- All through the launcher's official AI levers: nothing is written into the game's memory.
 - Your own car is never touched. Time Trial is left alone.
 
 ### Momentum
@@ -17,6 +18,7 @@ AI drivers have a weekend form, and in **Driver Career** and **My Team** that fo
 - In a career, each driver's trend over their last five races as a line, and those results as cells coloured by how hot they were.
 - HOT STREAK, SLUMP, FLYING, STRUGGLING, STEADY and ERRATIC tags, and live ON A CHARGE, LOSING TIME and MISTAKE marks during the race.
 - It doesn't take the keys from the game: drive with it open. Three sizes.
+- A compact strip on track with the drivers around you, placed in the game's own HUD editor.
 
 ### Settings
 Find these in **ADDON SETTINGS**.

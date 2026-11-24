@@ -478,14 +478,17 @@ guide::Data career(int rounds, momentum::Level level, unsigned seed, bool career
     return data;
 }
 
-// the compact view's three, as the plugin picks them in a race: the cars around yours and your teammate
-guide::Data with_compact(guide::Data d)
+// the compact view's three, as the plugin picks them in a race: the cars around yours and your teammate; outside a
+// race (0.2.0, players' reports): the most and the least in form, whose long role ran into the name
+guide::Data with_compact(guide::Data d, bool race = true)
 {
     size_t you = 0;
     for (size_t i = 0; i < d.rows.size(); i++)
         if (d.rows[i].human)
             you = i;
-    const char *roles[] = {"AHEAD", "BEHIND", "TEAMMATE"};
+    const char *race_roles[] = {"AHEAD", "BEHIND", "TEAMMATE"};
+    const char *other_roles[] = {"IN FORM", "OUT OF FORM", "TEAMMATE"};
+    const char *const *roles = race ? race_roles : other_roles;
     size_t picks[] = {3, 9, 6};
     for (int i = 0; i < 3; i++) {
         guide::Row r = d.rows[std::min(picks[i], d.rows.size() - 1)];
@@ -505,10 +508,24 @@ void shot(const std::filesystem::path &dir, const char *name, float w, float h, 
     preview::H = h;
     guide::g_size = size;
     preview::begin();
+    // 0.2.0: the strip and the reminder in their HUD editor boxes, at their defaults (the core's answer when it has no
+    // placement), scaled by the size the shot asks for
+    SwoftyHudSlotState none{};
+    none.size = sizeof none;
+    if (size != 1.0f) {
+        none.found = 1;
+        none.enabled = 1;
+        none.opacity = 1;
+        none.scale = size;
+        float ux = 0, uy = 0;
+        guide::hs::default_offset(compact ? guide::kStripSlot : guide::kHintSlot, ux, uy);
+        none.x = ux;
+        none.y = uy;
+    }
     if (compact)
-        guide::draw_compact(nullptr, data);
+        guide::draw_compact(nullptr, data, guide::hs::place(guide::kStripSlot, none, w, h));
     else if (hint)
-        guide::draw_hint(nullptr, data, t);
+        guide::draw_hint(nullptr, data, t, guide::hs::place(guide::kHintSlot, none, w, h));
     else
         guide::draw(nullptr, data, t);
     preview::save(dir / name);
@@ -561,6 +578,8 @@ int main(int argc, char **argv)
     }
     shot(dir, "compact_race.svg", 1920, 1080, with_compact(career(9, momentum::Level::normal, 11, true)), 10, false, 1.0f, true);
     shot(dir, "compact_720p.svg", 1280, 720, with_compact(career(9, momentum::Level::normal, 11, true)), 10, false, 1.0f, true);
+    shot(dir, "compact_practice.svg", 1920, 1080, with_compact(career(9, momentum::Level::normal, 11, true), false), 10,
+         false, 1.0f, true);
     guide::g_reduced = true;
     shot(dir, "guide_reduced_motion_opening.svg", 1920, 1080, career(9, momentum::Level::normal, 11, true), 0.05f);
     guide::g_reduced = false;

@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
 // Driver Momentum, based on msyeett's Driver Form (MIT, https://github.com/constructor-mods/driver-form).
-// Every driver the computer controls gets a weekend form. The form sets their pace through the game's own target lap
-// time, lowers their driving quality when they are out of form, and brings bad patches and hot spells. A board names
-// the drivers in and out of form.
+// Every driver the computer controls gets a weekend form. The form sets their pace and driving quality through the
+// launcher's official live car levers (0.2.0: ai.grip_scale, engine.power_scale and the AI's racecraft slots, no writes
+// to the game's memory), and brings bad patches and hot spells. A board names the drivers in and out of form.
 // Driver Momentum adds the memory: in a career the form follows each driver's streak (their results against their
 // usual and their teammate), their regularity (experience and awareness) and the dice; the Form Guide panel shows it
 // all, and the driver_momentum.form service gives it to other addons.
@@ -10,7 +10,6 @@
 // to the game, the patches, the messages, the panel and the service.
 // Include mixin.hpp first: registry.hpp redefines SWOFTY_ADDON so the DLL exports SwoftyAddonRegister.
 #include <swofty/mixin.hpp>
-#include <swofty/mem.hpp>
 
 #include <swofty/db.hpp>
 #include <swofty/events.hpp>
@@ -26,7 +25,6 @@
 
 #include <driver_momentum_api/form.hpp>
 
-#include "ai_driver.hpp"
 #include "ai_writes.hpp"
 #include "build_drivers.hpp"
 #include "form_guide.hpp"
@@ -233,14 +231,11 @@ std::string career_weekend(const events::Context &context)
 // Gives back what the addon wrote and forgets the list. A car it never wrote to (yours) is not touched.
 void stop()
 {
-    ai_driver::GameDrivers game;
     int released = 0;
-    if (!g_drivers.empty() && ai_driver::find(game) && game.records == g_records) {
-        for (Driver &driver : g_drivers) {
-            if (wrote_any(driver)) {
-                clear_driver(driver);
-                ++released;
-            }
+    for (Driver &driver : g_drivers) {
+        if (wrote_any(driver)) {
+            clear_driver(driver);
+            ++released;
         }
     }
     if (!g_drivers.empty())
@@ -252,10 +247,20 @@ void stop()
 }
 
 // Gets ready for a new session. The list is built later, when the game has its drivers.
+// 0.2.0: Driver Form's DLL in the game (both addons on in the profile)
+bool driver_form_on() { return GetModuleHandleW(L"driver_form.dll") != nullptr; }
+
 void arm()
 {
     stop();
     g_last_tick = Clock::now(); // leaves the game time to take the cleared values before they are read as stock
+    g_leave_ai = driver_form_on();
+    if (g_leave_ai) {
+        log("[driver-momentum] Driver Form (msyeett.driver-form) is also on: Driver Momentum leaves the AI to it and keeps "
+            "only its forms and the Form Guide; turn one of them off on the Addons page");
+        hud::toast("DRIVER FORM IS ALSO ON", "Driver Momentum leaves the AI to it. Turn one off on the Addons page.", 6,
+                   "generic");
+    }
     if (g_time_trial) {
         log("[driver-momentum] time trial, left alone");
         return;
@@ -413,9 +418,9 @@ void frame(double, void *)
         return;
     }
     g_last_tick = now;
-    // The game's big memory blocks stay where they are, so a check of one is trusted for two seconds instead of
-    // being asked again for every read.
-    mem::Trust trust(2000);
+    // 0.2.0: the strip and the reminder follow the game's race HUD (empty when the core can't tell: shown)
+    if (auto session = live::session())
+        guide::g_hud_hidden = live::hud_visible(*session) == false;
     if (check_pause(now)) {
         return;
     }
@@ -439,7 +444,7 @@ void frame(double, void *)
         return;
     }
     // Two checks: who drives each car (the whole grid when asked for, else a car a tick), and every 10 s, is the
-    // game's driver system still the one we found.
+    // live session still the one the grid was built in.
     if (g_check_control) {
         g_last_system_check = now - std::chrono::seconds(5);
         g_check_control = false;
@@ -451,12 +456,11 @@ void frame(double, void *)
     if (now - g_last_system_check >= std::chrono::seconds(10)) {
         g_last_system_check = now;
         auto start = Clock::now();
-        uintptr_t records = ai_driver::records_start();
+        uint32_t generation = live_generation();
         g_system_ms_max = std::max(g_system_ms_max, ms_since(start));
-        if (!records) {
-            return;
-        }
-        if (records != g_records) { // the game rebuilt its drivers: the cached pointers are gone
+        if (generation && g_live_generation && generation != g_live_generation) {
+            // a new live session: the grid is built again (destroying the layers gives every car back first)
+            log("[driver-momentum] a new live session (%u -> %u): the grid is built again", g_live_generation, generation);
             g_drivers.clear();
             return;
         }
@@ -506,18 +510,6 @@ void paint(SwoftyPaint *paint, void *user)
 }
 
 } // namespace
-
-// 0.1.1: the launcher's site binding where the game pushes each car's record into the AI system it is building (rbx:
-// the AiSystem; Swofty's KB, re/db/structs/AiSystem.h). Declared here: the SDK headers don't list site bindings yet.
-namespace swofty::game {
-inline constexpr site<"site_Ai_BuildSystem_RecordPushed"> site_Ai_BuildSystem_RecordPushed{};
-}
-
-SWOFTY_SITE(site_Ai_BuildSystem_RecordPushed, swofty::Context &c)
-{
-    ai_driver::g_built_system.store(c.rbx); // read only: the game's registers are left as they are
-    ai_driver::g_built_pushes.fetch_add(1, std::memory_order_relaxed);
-}
 
 SWOFTY_ON_LOAD
 {

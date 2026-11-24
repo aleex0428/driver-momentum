@@ -2,7 +2,7 @@
   "schema_version": 1,
   "id": "alexs.driver-momentum",
   "name": "Driver Momentum",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "author": "Alex Sánchez",
   "description": "AI drivers have a weekend form that follows their season: hot streaks and slumps from their results in Driver Career and My Team, veterans steadier than rookies, and a thermal Form Guide (F6). Based on msyeett's Driver Form.",
   "license": "MIT",
@@ -14,7 +14,7 @@
   "category": "ai",
   "compat": {
     "game": "f1_25",
-    "launcher": ">=1.8.36",
+    "launcher": ">=1.10.21",
     "platforms": [
       "steam"
     ]
@@ -23,11 +23,6 @@
     {
       "id": "swofty.core",
       "version": ">=0.1.0"
-    }
-  ],
-  "conflicts": [
-    {
-      "id": "msyeett.driver-form"
     }
   ],
   "experimental_features": [
@@ -129,7 +124,7 @@
       "id": "guide_size",
       "type": "choice",
       "label": "Form Guide size",
-      "description": "How big the Form Guide and its reminder are on screen.",
+      "description": "How big the Form Guide is on screen. The compact strip and the reminder are placed and sized in the game's HUD editor.",
       "values": [
         {
           "value": "small",
@@ -159,7 +154,7 @@
       "id": "guide_compact",
       "type": "toggle",
       "label": "Compact view on track",
-      "description": "While the Form Guide is closed, a small strip shows three drivers: in a race the cars ahead and behind you and your teammate, otherwise who is most and least in form.",
+      "description": "While the Form Guide is closed, a small strip shows three drivers: in a race the cars ahead and behind you and your teammate, otherwise who is most and least in form. Move it in the game's HUD editor.",
       "default": true,
       "binds": "native"
     },
@@ -329,6 +324,9 @@
     }
   ],
   "operations": {
+    "hud": [
+      "hud/slots.json"
+    ],
     "native": [
       {
         "dll": "native/driver_momentum.dll"

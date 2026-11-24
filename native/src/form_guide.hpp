@@ -9,6 +9,7 @@
 // The game's thread fills the rows (set); the render thread draws them.
 #pragma once
 #include <swofty/mixin.hpp>
+#include <swofty/hud_slot.hpp>
 #include <swofty/overlay.hpp>
 
 #include "ui_kit.hpp"
@@ -71,6 +72,7 @@ inline std::atomic<bool> g_hint_on{true};   // the "Form Guide reminder" setting
 inline std::atomic<bool> g_hint_new{false}; // the reminder may show (set by the game's thread)
 inline std::atomic<bool> g_reduced{false};  // "Form Guide motion: Reduced": no slide, scan line or flashing
 inline std::atomic<bool> g_compact_on{true}; // the compact view on track while the drawer is closed
+inline std::atomic<bool> g_hud_hidden{false}; // 0.2.0: the game hides its race HUD (replays, cutscenes, photo mode)
 inline int g_page = 0;                      // render thread: the drawer's page when its rows don't fit
 inline bool g_open = false;                 // render thread only
 inline std::chrono::steady_clock::time_point g_opened, g_hint_from;
@@ -646,17 +648,73 @@ inline void draw(ov::Paint *p, const Data &d_in, float t = 10)
     }
 }
 
-// The reminder: a tab that slides out of the screen's right edge for a few seconds; t is the seconds since it began.
-inline void draw_hint(ov::Paint *p, const Data &d, float t)
+// ---- 0.2.0: the strip and the reminder are entries of the game's HUD editor ----
+// The launcher's hud.slot (1.10.21, the OSD the Addon Browser asks in-game overlays to use): the player moves, scales
+// and switches them off in the game's own HUD editor. The same ids, rects and anchors as hud/slots.json. Without the
+// core's export (an older launcher) both stay in their default boxes, where they always sat.
+namespace hs = swofty::hud_slot;
+// the strip: right edge, a quarter down, 243 x 106 at 1080p (three rows)
+inline constexpr hs::Slot kStripSlot{"strip", "Driver Momentum", 0.8734f, 0.24f, 0.1266f, 0.0981f, hs::Anchor::right};
+// the reminder: right edge, two thirds down, 300 x 54 at 1080p
+inline constexpr hs::Slot kHintSlot{"hint", "Form Guide reminder", 0.8438f, 0.66f, 0.1562f, 0.05f, hs::Anchor::right};
+inline constexpr float kStripUnitH = 112; // the strip's height for three rows at scale 1 (head 22 + 3 x 28 + 6)
+inline constexpr float kHintUnitH = 54;
+
+// the game's opacity, 0..1 (a percentage taken as one, to be safe)
+inline float slot_opacity(const hs::Placement &at)
+{
+    float o = at.opacity > 1.5f ? at.opacity / 100.0f : at.opacity;
+    return std::clamp(o, 0.0f, 1.0f);
+}
+
+inline hs::Placement slot_place(const hs::Slot &s, float W, float H, std::atomic<int> &last)
+{
+    hs::Placement at;
+    hs::Result r = hs::get(s, W, H, at);
+    if (int(r) != last.exchange(int(r)))
+        swofty::log("[driver-momentum] hud slot %s: %s", s.id,
+                    r == hs::Result::ok ? "ok" : r == hs::Result::no_slot ? "not loaded yet (its default box)" : "unavailable (its default box)");
+    return at;
+}
+
+// the editor rows' names, once the core knows the slots
+inline void name_slots()
+{
+    static std::atomic<bool> strip{false}, hint{false};
+    if (!strip.load() && hs::declare(kStripSlot) == hs::Result::ok)
+        strip = true;
+    if (!hint.load() && hs::declare(kHintSlot) == hs::Result::ok)
+        hint = true;
+}
+
+// what the editor shows in the strip's box while the player places it
+inline Data sample_data()
+{
+    Data d;
+    auto row = [](const char *role, const char *label, float form, Moment m, bool human) {
+        Row r;
+        r.role = role;
+        r.label = label;
+        r.form = form;
+        r.moment = m;
+        r.human = human;
+        return r;
+    };
+    d.compact = {row("AHEAD", "RIVAL AHEAD", 0.62f, Moment::hot, false), row("BEHIND", "RIVAL BEHIND", -0.41f, Moment::none, false),
+                 row("TEAMMATE", "TEAMMATE", 0.18f, Moment::none, false)};
+    d.rows = d.compact;
+    return d;
+}
+
+// The reminder: a tab that slides out of its box's right edge for a few seconds; t is the seconds since it began.
+inline void draw_hint(ov::Paint *p, const Data &d, float t, const hs::Placement &box)
 {
     constexpr float kShow = 7.0f;
-    if (t < 0 || t > kShow || !key().vk)
+    if (t < 0 || t > kShow || !key().vk || !box.visible || box.h <= 0)
         return;
-    float k = std::max(ov::ui_scale(p) * g_size.load(), 0.8f);
-    float sw = 0, sh = 0;
-    ov::size(p, &sw, &sh);
-    ov::Rect safe = ov::safe_area(p);
+    float k = std::max(box.h / kHintUnitH, 0.5f);
     float out = g_reduced.load() ? 1.0f : ease_out(t / 0.4f) * (1 - ease_out((t - (kShow - 0.5f)) / 0.5f));
+    ov::OpacityScope fade(p, slot_opacity(box));
     int hot = 0, cold = 0;
     for (const Row &r : d.rows) {
         hot += !r.human && r.record && r.streak >= 0.55f ? 1 : 0;
@@ -670,7 +728,7 @@ inline void draw_hint(ov::Paint *p, const Data &d, float t)
     float kw = std::max(28 * k, text_w(p, ts(12 * k, kText, ov::align::center | ov::align::middle, 1.0f * k), key().label) + 14 * k);
     float w = 22 * k + kw + 14 * k + std::max(text_w(p, title, "FORM GUIDE"), text_w(p, subs, sub)) + 26 * k;
     float h = 54 * k;
-    float x = sw - w * out, y = safe.y + safe.h * 0.66f;
+    float x = box.x + box.w - w * out, y = box.y;
     ov::gradient(p, x - 20 * k, y, 20 * k, h, 0x00000000, 0x00000040, true);
     ov::rect(p, x, y, w, h, alpha(kBase, 0.95f));
     ov::gradient(p, x, y, 3 * k, h, kMagma, kDeep, false);
@@ -695,6 +753,12 @@ inline const char *short_role(std::string_view role)
         return "HOT";
     if (role == "COLDEST")
         return "COLD";
+    // 0.2.0 (players' reports): outside a race the strip names the most and least in form; "OUT OF FORM" ran into
+    // the driver's name
+    if (role == "IN FORM")
+        return "HOT";
+    if (role == "OUT OF FORM")
+        return "COLD";
     if (role == "BEHIND")
         return "BEHIND";
     if (role == "AHEAD")
@@ -702,22 +766,18 @@ inline const char *short_role(std::string_view role)
     return role.empty() ? "" : role.data();
 }
 
-inline void draw_compact(ov::Paint *p, const Data &d)
+// 0.2.0: in its HUD editor box: the box's height sets the scale (three rows fill it), the strip keeps the box's width
+inline void draw_compact(ov::Paint *p, const Data &d, const hs::Placement &box)
 {
-    if (d.compact.empty())
+    if (d.compact.empty() || !box.visible || box.w <= 0 || box.h <= 0)
         return;
-    // never below 0.95 of a 1080p screen's scale: at 720p its names stay about 13 px, its labels about 9.5 px
-    float k = std::max(ov::ui_scale(p) * g_size.load() * 0.92f, 0.95f);
-    float sw = 0, sh = 0;
-    ov::size(p, &sw, &sh);
-    ov::Rect safe = ov::safe_area(p);
-    float edge = sw - (safe.x + safe.w);
-    float dock = edge > 120 * k ? safe.x + safe.w : sw;
+    float k = std::max(box.h / kStripUnitH, 0.5f);
     float row_h = 28 * k, head = 22 * k;
-    float w = 256 * k + (edge > 120 * k ? 0 : edge); // the strip reaches the screen's edge, its text stays inside
+    float w = box.w;
     float h = head + row_h * float(d.compact.size()) + 6 * k;
-    float x = dock - w, y = safe.y + safe.h * 0.24f;
-    float padr = 12 * k + (edge > 120 * k ? 0 : edge);
+    float x = box.x, y = box.y;
+    float padr = 12 * k;
+    ov::OpacityScope fade(p, slot_opacity(box));
     ov::gradient(p, x - 16 * k, y, 16 * k, h, 0x00000000, 0x00000038, true);
     float cham = 10 * k;
     shape(p, {x + cham, y, x + w, y, x + w, y + h, x, y + h, x, y + cham}, alpha(kBase, 0.92f));
@@ -736,7 +796,11 @@ inline void draw_compact(ov::Paint *p, const Data &d)
     for (const Row &r : d.compact) {
         float mid = ry + row_h / 2;
         ov::rect(p, lx, ry + 6 * k, 3 * k, row_h - 12 * k, r.human ? kYou : thermal(r.form));
-        ov::text(p, lx + 10 * k, mid, ts(10 * k, kText2, ov::align::left | ov::align::middle, 0.8f * k), short_role(r.role));
+        {
+            // the role never leaves its column, whatever it says
+            ov::TextStyle rs = ts(10 * k, kText2, ov::align::left | ov::align::middle, 0.8f * k);
+            ov::text(p, lx + 10 * k, mid, rs, fit(p, rs, short_role(r.role), role_w - 4 * k));
+        }
         float value_left;
         if (!r.human) {
             vs.rgba = thermal(r.form);
@@ -768,6 +832,19 @@ inline void draw_compact(ov::Paint *p, const Data &d)
 // The overlay's paint callback (render thread).
 inline void paint(ov::Paint *p, void *)
 {
+    float W = 0, H = 0;
+    ov::size(p, &W, &H);
+    static std::atomic<int> strip_state{-1}, hint_state{-1};
+    name_slots();
+    hs::Placement strip_box = slot_place(kStripSlot, W, H, strip_state);
+    hs::Placement hint_box = slot_place(kHintSlot, W, H, hint_state);
+    // the game's HUD editor is open: a preview of the strip and the reminder in the boxes the player moves
+    if (strip_box.editor_open || hint_box.editor_open) {
+        Data sample = sample_data();
+        draw_compact(p, sample, strip_box);
+        draw_hint(p, sample, 1.5f, hint_box);
+        return;
+    }
     if (!g_live.load()) {
         g_open = false;
         g_hint_shown = false;
@@ -808,15 +885,17 @@ inline void paint(ov::Paint *p, void *)
         draw(p, data, std::chrono::duration<float>(now - g_opened).count());
         return;
     }
-    if (compact)
-        draw_compact(p, data);
+    // 0.2.0: the strip and the reminder only while the game shows its race HUD
+    bool hud = !g_hud_hidden.load();
+    if (compact && hud)
+        draw_compact(p, data, strip_box);
     if (!g_hint_shown)
         return;
     float t = std::chrono::duration<float>(now - g_hint_from).count();
     if (t > 8)
         g_hint_shown = false;
-    else
-        draw_hint(p, data, t);
+    else if (hud)
+        draw_hint(p, data, t, hint_box);
 }
 
 } // namespace driver_form::guide

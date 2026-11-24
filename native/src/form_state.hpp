@@ -6,7 +6,6 @@
 #include <swofty/registry.hpp>
 #include <swofty/systems/cars.hpp>
 
-#include "ai_driver.hpp"
 #include "momentum.hpp"
 
 #include <array>
@@ -50,6 +49,14 @@ inline bool strength_of(const std::string &name, Strength &strength)
 
 enum class Patch { none, bad, hot, moment };
 
+// 0.2.0: the official live car levers a driver's form sets, as factors on the game's own values (1: untouched)
+struct Levers {
+    float grip = 1;   // ai.grip_scale
+    float power = 1;  // engine.power_scale
+    float offset = 1; // ai.offset_variation.max_offset
+    float attack = 1; // ai.overtake.attacker_close_enough_car_lengths
+};
+
 struct Driver {
     uint32_t car = 0;
     uint16_t stat_id = 0;
@@ -59,19 +66,17 @@ struct Driver {
     std::string team;       // tells teammates apart for the streak; empty when unknown
     momentum::Ratings ratings; // experience and awareness from the game database; unknown below 0
     float regularity = 1;      // how far this driver's form swings: momentum::regularity(ratings)
-    uintptr_t state = 0;   // the game's values for this car, found once so the tick stays cheap
-    uintptr_t master = 0;
-    uintptr_t profile = 0;
     float form = 0;        // -1 bad .. +1 good
-    ai_driver::Stock stock;
-    std::vector<Layer> layers;
+    std::vector<Layer> layers;       // the defending layer, for the whole session
+    std::vector<Layer> lever_layers; // 0.2.0: the pace and driving levers, made again when the form's effect moves
+    Levers applied;                  // what lever_layers hold
+    bool levers_on = false;
+    bool lever_refused = false;      // the core refused a lever once (said once in the log)
     Patch patch = Patch::none;
     Clock::time_point patch_until;
     Clock::time_point next_event;
     bool human = true;     // the first tick decides
     bool control_ai = false; // the game said the computer drives this car (its control, or the live state)
-    // what this addon changed in the game for this car: only that is given back
-    bool wrote_profile = false, wrote_state = false, wrote_master = false;
     int crossings = 0;
     Clock::time_point last_crossing{};
     int last_position = 0;
@@ -79,7 +84,7 @@ struct Driver {
 };
 
 inline std::vector<Driver> g_drivers;
-inline uintptr_t g_records = 0; // the record table the cached pointers belong to
+inline uint32_t g_live_generation = 0; // 0.2.0: the live session the grid was built in (a new one builds it again)
 inline Clock::time_point g_last_system_check;
 inline Clock::time_point g_last_control_check;
 inline bool g_check_control = true; // read who drives every car on the next tick
@@ -106,6 +111,9 @@ inline bool g_race_session = false;            // this session is a race (race.s
 inline std::mt19937 g_random{std::random_device{}()};
 inline Strength g_strength{};
 inline bool g_patches_on = true;
+// 0.2.0 (players' reports): Driver Form (msyeett.driver-form) is on too: it drives the AI, Driver Momentum only keeps
+// its forms, its book and the Form Guide (they used to stop Play together, which players took for a crash)
+inline bool g_leave_ai = false;
 inline bool g_armed = false;
 inline bool g_board_done = false;
 inline Clock::time_point g_last_tick;

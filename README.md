@@ -12,9 +12,10 @@ Driver Form does is still here; Driver Momentum adds the memory, the Form Guide 
 ### The weekend form (from Driver Form)
 - Every AI driver gets a form for the weekend, from badly out of form (-1) to flying (+1). It lasts through practice,
   qualifying and the race, even if you close the game in between.
-- In-form drivers are quicker, through the game's own target lap time, and defend from further back.
-- Out-of-form drivers are slower: they brake earlier, carry less speed and get on the throttle later, and give way
-  sooner.
+- In-form drivers are quicker and defend from further back.
+- Out-of-form drivers are slower, take a wider and less tidy line, attack less and give way sooner.
+- All of it through the launcher's official live car levers (grip, engine power and the AI's racecraft), which the
+  launcher keeps and gives back by itself: nothing is written into the game's memory.
 - Bad patches, hot spells and sudden mistakes during the race.
 - Your own car is never touched, and Time Trial is left alone.
 
@@ -61,7 +62,7 @@ slides out of the screen's edge for a few seconds with the key.
 | Form Guide key | F6 (default), F5, F9, F10, F11 or None |
 | Form Guide size | Small, Normal (default), Large |
 | Form Guide reminder | The card that names the key at the first session of each weekend. On by default |
-| Compact view on track | While the Form Guide is closed, a small strip with three drivers: in a race the cars ahead and behind you and your teammate, otherwise who is most and least in form. On by default |
+| Compact view on track | While the Form Guide is closed, a small strip with three drivers: in a race the cars ahead and behind you and your teammate, otherwise who is most and least in form. On by default. Move, resize or hide it in the game's HUD editor |
 | Form Guide motion | Full (default) or Reduced: no slide, scan line or flashing; live moments stay as fixed marks |
 | In form / Out of form toasts | After the first lap, name who is in and out of form, and in a career who is on a hot streak or in a slump. Off by default |
 | Bad patches and mistakes | On or off |
@@ -70,11 +71,12 @@ slides out of the screen's edge for a few seconds with the key.
 
 ## Works with
 - **Silly Season**: yes. They don't share anything; Silly Season's panel is on F7.
-- **Driver Form** (msyeett): no, turn one off. Both write the same values in the game, and Swofty marks them as a
-  conflict.
+- **Driver Form** (msyeett): turn one off. With both on, Driver Momentum leaves the AI to Driver Form (it keeps only
+  its forms and the Form Guide) and says so on screen at each session.
 - **Team Orders**, **AI Driver Behaviour** and other addons that change how the AI drives: they work, but both change
   the same AI, so the effects add up (for example your teammate's pace with Push Now).
 - Drivers added by other addons get a form and a streak like everyone else.
+- Checked on 24 Nov with Swofty Launcher 1.10.35, Silly Season 1.1.51 and Driver Form 0.2.1.
 
 ## For other addons: the driver_momentum.form service
 Copy [`native/include/driver_momentum_api/form.hpp`](native/include/driver_momentum_api/form.hpp) (MIT) and look the
