@@ -468,6 +468,43 @@ void service(swofty::fake::Live &live)
 
 } // namespace
 
+// 0.2.1 (a player's report: no form history after 0.2.0): the event context's labels have no database row, so its
+// drivers went untold (no form, no history). The UDP identity tells them, and the safety car stays off the grid.
+void context_identities(swofty::fake::Live &live)
+{
+    g_context_entrants.clear();
+    for (uint32_t car = 0; car < 7; car++) {
+        auto &c = live.add_car(car, 0);
+        if (car == 6)
+            c.flags = 0; // the safety car: in the context, not a racer
+        auto &d = live.detail(car);
+        d.have |= SWOFTY_LIVE_HAVE_IDENTITY;
+        d.driver_id = uint16_t(40 + car);
+        Entrant e;
+        e.car = uint8_t(car);
+        e.label = "no_row_" + std::to_string(car);
+        g_context_entrants.push_back(e);
+    }
+    std::vector<Entrant> out;
+    check(read_entrants(out, false) && out.size() == 6, "the context's grid, without the safety car");
+    int by_udp = 0;
+    for (const Entrant &e : out) {
+        Driver d;
+        d.car = e.car;
+        d.stat_id = e.driver;
+        if (set_stat_id(d, e) == 2 && d.verified && d.stat_id == 40 + e.car)
+            by_udp++;
+    }
+    check(by_udp == 6, "a label without a database row: the driver is told by his UDP identity");
+    // no identity yet: untold (build() waits up to five seconds for it)
+    live.detail(2).have &= ~uint64_t(SWOFTY_LIVE_HAVE_IDENTITY);
+    check(read_entrants(out, false), "(the grid again)");
+    Driver d;
+    d.car = 2;
+    check(set_stat_id(d, out[2]) == 0 && !d.verified, "no row and no identity yet: not told");
+    g_context_entrants.clear();
+}
+
 int main(int argc, char **argv)
 {
     g_quiet = !(argc > 1 && std::string(argv[1]) == "verbose");
@@ -663,6 +700,7 @@ int main(int argc, char **argv)
     book_files(live);
     race_cases(live);
     service(live);
+    context_identities(live);
 
     live.uninstall();
     if (g_failed) {

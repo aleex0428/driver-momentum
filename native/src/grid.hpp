@@ -26,7 +26,23 @@ struct Entrant {
     uint8_t number = 0;
     uint8_t car = 0xff;  // the game's vehicle id
     std::string label;   // the DB row, when the grid came from the event context
+    // 0.2.1: the driver the game's UDP participants name for this car (the live state's identity: a stock driver's
+    // stat id), the second way to know a driver of the event context whose label has no database row
+    uint16_t udp_driver = 0;
+    bool udp_known = false;
 };
+
+// 0.2.1: the live state's identity of a car, when it has one
+inline bool live_identity(uint32_t car, uint16_t &driver, uint8_t *number = nullptr)
+{
+    auto detail = live::car_detail(car);
+    if (!detail || !live::has(*detail, SWOFTY_LIVE_HAVE_IDENTITY) || detail->driver_id >= 0xf000)
+        return false;
+    driver = detail->driver_id;
+    if (number)
+        *number = detail->race_number;
+    return true;
+}
 
 // The name the game shows for a car, in capitals. Empty when it has none.
 inline std::string game_name(uint32_t car)
@@ -100,9 +116,18 @@ inline bool read_entrants(std::vector<Entrant> &out, bool allow_unknown)
 {
     out.clear();
     if (!g_context_entrants.empty()) {
-        out = g_context_entrants;
+        // 0.2.1 (a player's report: no form history after 0.2.0): each car also takes its UDP identity, and a car
+        // the live state says doesn't race (the safety car, which the context lists as a 23rd entrant) stays out
+        for (const Entrant &e : g_context_entrants) {
+            if (live::available())
+                if (auto c = live::car(e.car); c && !live::is_racer(*c))
+                    continue;
+            Entrant x = e;
+            x.udp_known = live_identity(e.car, x.udp_driver, nullptr);
+            out.push_back(x);
+        }
         report_route(0, out.size());
-        return true;
+        return !out.empty();
     }
     if (!live::available()) {
         return false;

@@ -57,18 +57,27 @@ inline void set_label(Driver &driver, const Entrant &entrant, const std::map<int
 }
 
 // The driver's id in the game's table, when the grid came from the event context.
-inline void set_stat_id(Driver &driver, const Entrant &entrant)
+// Returns how it was known: 1 by the database row, 2 by the game's UDP identity (0.2.1), 0 not at all.
+inline int set_stat_id(Driver &driver, const Entrant &entrant)
 {
-    if (entrant.label.empty()) {
-        return;
+    if (!entrant.label.empty()) {
+        db::Cursor cursor{};
+        db::Value id{};
+        if (db::row("entrants.drivers", entrant.label, &cursor) == db::Result::ok &&
+            db::cell(&cursor, "stat_id", &id) == db::Result::ok && id.i >= 0 && id.i < 0xf000) {
+            driver.stat_id = uint16_t(id.i);
+            driver.verified = true; // the database's own row for this driver
+            return 1;
+        }
     }
-    db::Cursor cursor{};
-    db::Value id{};
-    if (db::row("entrants.drivers", entrant.label, &cursor) == db::Result::ok &&
-        db::cell(&cursor, "stat_id", &id) == db::Result::ok && id.i >= 0 && id.i < 0xf000) {
-        driver.stat_id = uint16_t(id.i);
-        driver.verified = true; // the database's own row for this driver
+    // 0.2.1: the label has no row (a player's report: no form history after 0.2.0); the UDP identity is the stat id
+    // 0.1.1 read from the game's memory for a stock driver
+    if (!driver.verified && entrant.udp_known) {
+        driver.stat_id = entrant.udp_driver;
+        driver.verified = true;
+        return 2;
     }
+    return driver.verified ? 3 : 0;
 }
 
 // Milliseconds since a point in time, for the build log.
@@ -186,9 +195,16 @@ inline bool build()
     auto cars_done = Clock::now();
     // The game's own names first. The table of initials is slow to walk, so it is only read for drivers without one.
     std::vector<size_t> unnamed;
+    int by_row = 0, by_udp = 0, by_live = 0;
+    std::string unknown;
     for (size_t index = 0; index < g_drivers.size(); index++) {
         Driver &driver = g_drivers[index];
-        set_stat_id(driver, entrants[index]);
+        int how = set_stat_id(driver, entrants[index]);
+        by_row += how == 1;
+        by_udp += how == 2;
+        by_live += how == 3;
+        if (!how && !g_context_humans.count(driver.car) && unknown.size() < 120)
+            unknown += " car " + std::to_string(driver.car) + " '" + entrants[index].label + "'";
         if (!set_game_label(driver, entrants[index])) {
             unnamed.push_back(index);
         }
@@ -217,6 +233,21 @@ inline bool build()
             set_label(g_drivers[index], entrants[index], initials_by_id);
         }
     }
+    // 0.2.1: the game's UDP participants come a moment after the cars: the first five seconds wait for them rather
+    // than build a grid whose drivers can't be told (they would get no form and no history this session)
+    int left_unknown = 0;
+    for (const Driver &driver : g_drivers) // your car is never waited for (a created driver has no row)
+        left_unknown += driver.verified || g_context_humans.count(driver.car) ? 0 : 1;
+    if (left_unknown && g_build_failures < 10) {
+        if (g_build_failures == 0)
+            log("[driver-momentum] %d driver(s) not told yet:%s; waiting for the game's UDP identities", left_unknown,
+                unknown.c_str());
+        g_drivers.clear();
+        return false;
+    }
+    log("[driver-momentum] driver ids: %d from their database row, %d from the game's UDP identity, %d from the live "
+        "state, %d unknown%s%s",
+        by_row, by_udp, by_live, left_unknown, unknown.empty() ? "" : ":", unknown.c_str());
     auto names_done = Clock::now();
     g_live_generation = live_generation();
     give_weekend_forms();

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.1
+
+From a player's report ("since the newest update I'm not seeing any of the previous form"):
+- **Your career's form history is back.** 0.2.0 told the drivers by their row in the game's database, and when a driver's name had no row he went unknown: no form and no history. Driver Momentum now also tells him by the identity the game sends for his car (the same driver id 0.1.1 read). Nothing of the history was lost: it shows again from the first session.
+- The safety car no longer counts as a driver of the grid.
+- The first seconds of a session wait for the drivers' identities, and the log says how each one was told (`driver ids: ...`).
+
 ## 0.2.0
 
 Only the launcher's own APIs, as the Addon Browser now asks (23 Nov):

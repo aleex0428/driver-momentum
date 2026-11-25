@@ -2,7 +2,7 @@
   "schema_version": 1,
   "id": "alexs.driver-momentum",
   "name": "Driver Momentum",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "author": "Alex Sánchez",
   "description": "AI drivers have a weekend form that follows their season: hot streaks and slumps from their results in Driver Career and My Team, veterans steadier than rookies, and a thermal Form Guide (F6). Based on msyeett's Driver Form.",
   "license": "MIT",
